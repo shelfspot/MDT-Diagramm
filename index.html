@@ -69,6 +69,7 @@ const valid = days.length === ranks.length &&
 
   const canvas = document.getElementById("ranking");
   canvas.width = Math.max(300, days.length * 30);
+  canvas.height = 280;
   new Chart(canvas, {
     type: "line",
     data: {
