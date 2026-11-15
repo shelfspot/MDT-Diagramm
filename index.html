@@ -44,7 +44,7 @@ const defaultRanks = [
 function readNumbers(key, fallback) {
   const value = params.get(key);
   if (!value) return fallback;
-  const numbers = value.split(",").map(Number);
+  const numbers = value.split(/[|,]/).map(Number);
   if (!numbers.length ||
       numbers.some(n => !Number.isFinite(n))) {
     return fallback;
