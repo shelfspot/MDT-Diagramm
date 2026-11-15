@@ -22,7 +22,14 @@
     border: 1px solid #a67b28;
     border-radius: 14px;
   }
-  canvas { width: 100% !important; }
+  .chart-box {
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+canvas {
+  width: 100% !important;
+}
 </style>
 </head>
 <body>
@@ -60,8 +67,9 @@ const valid = days.length === ranks.length &&
   days.every(n => Number.isInteger(n) && n > 0) &&
   ranks.every(n => Number.isInteger(n) && n >= 1 && n <= 11);
 
-if (valid) {
-  new Chart(document.getElementById("ranking"), {
+  const canvas = document.getElementById("ranking");
+  canvas.width = Math.max(300, days.length * 30);
+  new Chart(canvas, {
     type: "line",
     data: {
       labels: days.map(String),
@@ -78,7 +86,7 @@ if (valid) {
       }]
     },
     options: {
-      responsive: true,
+      responsive: false,
       maintainAspectRatio: false,
       plugins: {
         legend: {display: false}
