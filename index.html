@@ -3,10 +3,11 @@
 <html lang="de">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1">
   <title>MDT Platzierungsverlauf</title>
 
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
   <style>
     * {
@@ -16,58 +17,115 @@
     html, body {
       margin: 0;
       padding: 0;
-      background: #101014;
-      color: #f5c65c;
-      font-family: Arial, sans-serif;
       width: 100%;
+      background: #101014;
+      font-family: Arial, sans-serif;
+      color: #f5c65c;
     }
 
     .chart-box {
+      position: relative;
       width: 100%;
       height: 320px;
-      padding: 12px 8px;
+      padding: 12px 8px 8px;
       background: #17171d;
       border: 1px solid #a67b28;
       border-radius: 14px;
       overflow: hidden;
     }
 
-    .chart-scroll {
+    /* Dezentes MDT-Wasserzeichen */
+    .chart-box::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background-image: url("./mdt-logo.png");
+      background-repeat: no-repeat;
+      background-position: center;
+      background-size: 65% auto;
+      opacity: 0.075;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .chart-layout {
+      position: relative;
+      z-index: 1;
+      display: flex;
       width: 100%;
+      height: 100%;
+      min-width: 0;
+    }
+
+    /* Linke Achse bleibt fest */
+    .fixed-axis {
+      flex: 0 0 34px;
+      width: 34px;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    /* Nur die Spieltage scrollen */
+    .chart-scroll {
+      flex: 1;
+      min-width: 0;
       height: 100%;
       overflow-x: auto;
       overflow-y: hidden;
-      -webkit-overflow-scrolling: touch;
       scrollbar-width: thin;
-      scrollbar-color: #a67b28 #17171d;
+      scrollbar-color: #e4ad35 #27272f;
+    }
+
+    .chart-scroll::-webkit-scrollbar {
+      height: 7px;
+    }
+
+    .chart-scroll::-webkit-scrollbar-track {
+      background: #27272f;
+      border-radius: 10px;
+    }
+
+    .chart-scroll::-webkit-scrollbar-thumb {
+      background: #e4ad35;
+      border-radius: 10px;
     }
 
     .chart-inner {
-      position: relative;
-      height: 280px;
+      height: 100%;
       min-width: 100%;
     }
 
-    #ranking {
+    canvas {
       display: block;
+      width: 100% !important;
+      height: 100% !important;
     }
   </style>
 </head>
 
 <body>
-
   <div class="chart-box">
-    <div class="chart-scroll" id="scrollArea">
-      <div class="chart-inner" id="chartInner">
-        <canvas id="ranking"></canvas>
+    <div class="chart-layout">
+
+      <div class="fixed-axis">
+        <canvas id="fixedAxis"></canvas>
       </div>
+
+      <div class="chart-scroll" id="chartScroll">
+        <div class="chart-inner" id="chartInner">
+          <canvas id="ranking"></canvas>
+        </div>
+      </div>
+
     </div>
   </div>
 
   <script>
-    const params = new URLSearchParams(window.location.search);
+    const params = new URLSearchParams(
+      window.location.search
+    );
 
-    // Beispieldaten für den direkten Aufruf
+    // Vorschauwerte, wenn keine Glide-Daten vorliegen
     const defaultDays = Array.from(
       { length: 14 },
       (_, i) => i + 1
@@ -75,7 +133,7 @@
 
     const defaultRanks = [
       5, 4, 7, 9, 9, 10, 11,
-      11, 11, 11, 10, 9, 10, 11
+      11, 11, 10, 9, 10, 11, 11
     ];
 
     function readNumbers(key, fallback) {
@@ -85,10 +143,10 @@
 
       const numbers = value
         .split(/[|,]/)
-        .map(v => Number(v.trim()));
+        .map(Number);
 
       if (
-        numbers.length === 0 ||
+        !numbers.length ||
         numbers.some(n => !Number.isFinite(n))
       ) {
         return fallback;
@@ -97,133 +155,235 @@
       return numbers;
     }
 
-    const days = readNumbers("days", defaultDays);
-    const ranks = readNumbers("ranks", defaultRanks);
+    const days = readNumbers(
+      "days",
+      defaultDays
+    );
+
+    const ranks = readNumbers(
+      "ranks",
+      defaultRanks
+    );
 
     const valid =
       days.length === ranks.length &&
       days.length > 0 &&
       days.every(n => Number.isInteger(n) && n > 0) &&
       ranks.every(n =>
-        Number.isInteger(n) && n >= 1 && n <= 11
+        Number.isInteger(n) &&
+        n >= 1 &&
+        n <= 11
       );
 
-    if (valid && typeof Chart !== "undefined") {
+    if (valid) {
+      const scroll = document.getElementById(
+        "chartScroll"
+      );
 
-      const chartInner = document.getElementById("chartInner");
-      const scrollArea = document.getElementById("scrollArea");
+      const inner = document.getElementById(
+        "chartInner"
+      );
 
-      const canvas = document.getElementById("ranking");
+      // Zehn Spieltage gleichzeitig sichtbar
+      const visibleDays = 10;
 
-      // 10 Spieltage im sichtbaren Bereich
-      function setChartWidth() {
-        const visibleWidth = scrollArea.clientWidth;
-        const chartWidth = Math.max(
-          visibleWidth,
-          Math.ceil(days.length * visibleWidth / 10)
-        );
+      const pointWidth =
+        scroll.clientWidth / visibleDays;
 
-        chartInner.style.width = chartWidth + "px";
-      }
+      inner.style.width =
+        Math.max(
+          scroll.clientWidth,
+          days.length * pointWidth
+        ) + "px";
 
-      setChartWidth();
+      const gold = "#f5e6a0";
+      const grid = "rgba(255,255,255,0.22)";
 
-      const chart = new Chart(canvas, {
-        type: "line",
-
-        data: {
-          labels: days.map(String),
-
-          datasets: [{
-            label: "Platzierung",
-            data: ranks,
-            borderColor: "#f5c65c",
-            backgroundColor: "rgba(245,198,92,0.12)",
-            pointBackgroundColor: "#ffd766",
-            pointBorderColor: "#ffffff",
-            pointRadius: 3,
-            pointHoverRadius: 5,
-            borderWidth: 3,
-            tension: 0.25,
-            fill: true
-          }]
+      const commonY = {
+        min: 1,
+        max: 11,
+        reverse: true,
+        position: "left",
+        ticks: {
+          stepSize: 1,
+          color: "#ffffff",
+          font: {
+            size: 12,
+            weight: "bold"
+          }
         },
+        grid: {
+          color: grid,
+          drawTicks: false
+        },
+        border: {
+          display: false
+        }
+      };
 
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          animation: false,
-
-          interaction: {
-            mode: "index",
-            intersect: false
+      // Hauptdiagramm
+      const rankingChart = new Chart(
+        document.getElementById("ranking"),
+        {
+          type: "line",
+          data: {
+            labels: days.map(String),
+            datasets: [{
+              label: "Platzierung",
+              data: ranks,
+              borderColor: gold,
+              backgroundColor:
+                "rgba(245,198,92,0.12)",
+              pointBackgroundColor: "#ffffff",
+              pointBorderColor: "#ffffff",
+              pointRadius: 4,
+              pointHoverRadius: 6,
+              borderWidth: 3,
+              tension: 0.25,
+              fill: true
+            }]
           },
-
-          plugins: {
-            legend: {
-              display: false
-            },
-
-            tooltip: {
-              callbacks: {
-                title: items =>
-                  "Spieltag " + items[0].label,
-                label: item =>
-                  "Platz " + item.parsed.y
-              }
-            }
-          },
-
-          scales: {
-            x: {
-              title: {
-                display: true,
-                text: "Spieltag",
-                color: "#dddddd"
-              },
-
-              ticks: {
-                color: "#dddddd",
-                autoSkip: false,
-                maxRotation: 0
-              },
-
-              grid: {
-                color: "#303038"
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: false,
+            layout: {
+              padding: {
+                top: 8,
+                bottom: 8
               }
             },
-
-            y: {
-              reverse: true,
-              min: 1,
-              max: 11,
-
-              ticks: {
-                color: "#dddddd",
-                stepSize: 1
+            plugins: {
+              legend: {
+                display: false
               },
-
-              grid: {
-                color: "#303038"
+              tooltip: {
+                callbacks: {
+                  title: items =>
+                    "Spieltag " +
+                    days[items[0].dataIndex],
+                  label: item =>
+                    "Platz " + item.raw
+                }
+              }
+            },
+            scales: {
+              x: {
+                offset: true,
+                ticks: {
+                  color: "#ffffff",
+                  maxRotation: 0,
+                  autoSkip: false,
+                  font: {
+                    size: 11,
+                    weight: "bold"
+                  }
+                },
+                title: {
+                  display: true,
+                  text: "Spieltag",
+                  color: "#ffffff",
+                  font: {
+                    size: 12,
+                    weight: "bold"
+                  }
+                },
+                grid: {
+                  color: grid
+                },
+                border: {
+                  display: false
+                }
+              },
+              y: {
+                ...commonY,
+                display: false
               }
             }
           }
         }
-      });
+      );
 
-      // Breite bei Bildschirmänderung aktualisieren
-      const observer = new ResizeObserver(() => {
-        setChartWidth();
-        chart.resize();
-      });
+      // Feststehende Platzierungsachse
+      const axisChart = new Chart(
+        document.getElementById("fixedAxis"),
+        {
+          type: "line",
+          data: {
+            labels: days.map(String),
+            datasets: [{
+              data: ranks,
+              borderColor: "transparent",
+              pointRadius: 0
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: false,
+            events: [],
+            layout: {
+              padding: {
+                top: 8,
+                bottom: 8
+              }
+            },
+            plugins: {
+              legend: {
+                display: false
+              },
+              tooltip: {
+                enabled: false
+              }
+            },
+            scales: {
+              x: {
+                display: true,
+                ticks: {
+                  display: false
+                },
+                grid: {
+                  display: false
+                },
+                border: {
+                  display: false
+                }
+              },
+              y: {
+                ...commonY,
+                afterFit(scale) {
+                  scale.width = 34;
+                },
+                grid: {
+                  display: false
+                }
+              }
+            }
+          }
+        }
+      );
 
-      observer.observe(scrollArea);
+      // Bei Größenänderung zehn Spieltage beibehalten
+      window.addEventListener("resize", () => {
+        const width = scroll.clientWidth;
+
+        inner.style.width =
+          Math.max(
+            width,
+            days.length * width / visibleDays
+          ) + "px";
+
+        rankingChart.resize();
+        axisChart.resize();
+      });
 
     } else {
-      document.getElementById("chartInner").textContent =
-        "Diagrammdaten konnten nicht geladen werden.";
+      document.querySelector(".chart-box")
+        .innerHTML =
+        "<p style='padding:15px;color:white'>" +
+        "Keine gültigen Diagrammdaten vorhanden." +
+        "</p>";
     }
   </script>
-
 </body>
 </html>
