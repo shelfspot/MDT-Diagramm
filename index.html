@@ -58,7 +58,7 @@ const ranks = readNumbers("ranks", defaultRanks);
 const valid = days.length === ranks.length &&
   days.length > 0 &&
   days.every(n => Number.isInteger(n) && n > 0) &&
-  ranks.every(n => Number.isInteger(n) && n >= 1 && n <= 28);
+  ranks.every(n => Number.isInteger(n) && n >= 1 && n <= 11);
 
 if (valid) {
   new Chart(document.getElementById("ranking"), {
@@ -96,7 +96,7 @@ if (valid) {
         y: {
           reverse: true,
           min: 1,
-          max: 28,
+          max: 11,
           ticks: {
             color: "#ddd",
             stepSize: 3
