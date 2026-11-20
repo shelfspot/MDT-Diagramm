@@ -1,0 +1,48 @@
+
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: transparent;
+    }
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: Arial, sans-serif;
+      font-weight: 800;
+    }
+    #anzeige {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      font-size: 28px;
+      white-space: nowrap;
+    }
+  </style>
+</head>
+<body>
+  <div id="anzeige"></div>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const richtung = params.get("richtung") || "—";
+    const zahl = params.get("zahl") || "0";
+    const farbe = params.get("farbe") || "gruen";
+
+    const farben = {
+      gruen: "#22c55e",
+      rot: "#ef4444",
+      grau: "#9ca3af"
+    };
+
+    const el = document.getElementById("anzeige");
+    el.style.color = farben[farbe.toLowerCase()] || farbe;
+    el.textContent = richtung + (richtung === "—" ? "" : zahl);
+  </script>
+</body>
+</html>
